@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { connection } from 'mongoose';
 
-import { root, wildcard } from './routes/root';
+import { root, wildcard } from './routes/rootRoutes';
 import connectDb from './config/connectDb';
 
 dotenv.config();
