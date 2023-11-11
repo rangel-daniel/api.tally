@@ -31,16 +31,16 @@ const authUserSchema = userSchema.clone();
 authUserSchema.add({
 	email: {
 		type: String,
-		unique: true,
-		required: true,
+		unique: true, 
+		required: [true, 'You must enter an email.'],
 		validate: {
 			validator: (value: string) => { return isEmail(value); },
-			message: ({ value }: { value: string }) => `${value} is not a valid email.`
+			message: 'Invalid email.'
 		}
 	},
 	password: {
 		type: String,
-		required: true,
+		required: [true, 'You must enter a password.'],
 		validate: {
 			validator: (value: string) => { return isStrongPassword(value); },
 			message: 'Invalid password.'
@@ -48,10 +48,10 @@ authUserSchema.add({
 	},
 	name: {
 		type: String,
-		required: true,
+		required: [true, 'You must enter a name.'],
 		validate: {
 			validator: (value: string) => { return value.length >= 5 && value.length <= 50; },
-			message: 'Invalid name. Must be between 5 - 50 characters.'
+			message: 'Invalid name.'
 		}
 	}
 });
