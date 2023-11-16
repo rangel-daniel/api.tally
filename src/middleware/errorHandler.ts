@@ -1,6 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import { Error as MongoError } from 'mongoose';
 
+/**
+* This look kinda rough right now.
+* Should clean up in the future if it gets any messier. 
+* @description Can also handle validation errors from Mongo models to declutter controllers. 
+* */
 const errorHandler = async (error: Error, req: Request, res: Response, next: NextFunction) => {
 	let status = 500;
 	let body: { [key: string]: unknown } = {};
