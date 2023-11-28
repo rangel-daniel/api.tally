@@ -23,7 +23,6 @@ const getTransporter = async (): Promise<Transporter | Error> => {
 
 	try {
 		const { token, res } = await oauth.getAccessToken();
-
 		const newTransporter = nodemailer.createTransport({
 			service: 'gmail',
 			auth: {

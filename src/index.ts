@@ -4,17 +4,19 @@ import { connection } from 'mongoose';
 
 import { root, wildcard } from './routes/rootRoutes';
 import auth from './routes/authRoutes';
+
 import connectDb from './config/connectDb';
 import errorHandler from './middleware/errorHandler';
+import path from 'path';
+
+const PORT = 3000;
+const app = express();
 
 dotenv.config();
-
-const app = express();
-const PORT = 3000;
-
 connectDb();
-
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/', root);
 app.use('/auth', auth);

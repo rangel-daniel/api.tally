@@ -3,12 +3,23 @@ import getTransporter from '../config/transporter';
 import fs from 'fs';
 import path from 'path';
 import ejs from 'ejs';
-import { Types } from 'mongoose';
 
+export const sendEmail = async (userInfo: { email: string, name: string }, secrete: { type: 'activate' | 'password', token: string}) => {
+	const PASSWORD = {
+		title: 'Reset your password',
+		body: 'A password reset request has been submitted for your account. To update your password, click the button below.',
+		btnLabel: 'Reset password'
+	};
 
-export const sendEmail = async (userInfo: { _id: Types.ObjectId, email: string, name: string }, secrete: { type: 'activate' | 'password', _id: Types.ObjectId }) => {
+	const ACTIVATE = {
+		title: 'Activate your account',
+		body: 'To activate your account we need to verify your email address. Please click the button below to complete the process.',
+		btnLabel: 'Activate account'
+	};
+
 	const EMAIL = process.env.EMAIL;
-	const URL = process.env.NODE_ENV === 'Dev' ? 'http://localhost:3000/' : 'https://api.tally-app.live/';
+	const URL = process.env.NODE_ENV === 'Dev' ? 'http://localhost:3000/auth/' : 'https://api.tally-app.live/auth/';
+
 	try {
 		const transporter: Error | Transporter = await getTransporter();
 
@@ -16,16 +27,19 @@ export const sendEmail = async (userInfo: { _id: Types.ObjectId, email: string, 
 			return transporter;
 		}
 
-		const { _id: uid, email, name } = userInfo;
-		const { type, _id: token } = secrete;
+		const { email, name } = userInfo;
+		const { type, token } = secrete;
+		const isActivation = type === 'activate';
 
-		const subject = type === 'activate' ? 'Activate your account' : 'Password reset';
-		const link = URL + `${type}/${uid}/${token}/`;
-		const templatePath = path.join(__dirname, '..', 'templates', type === 'activate' ? 'activateEmail.html' : 'passwordEmail.html');
+		const subject = isActivation ? ACTIVATE.title : PASSWORD.title;
+		const link = URL + `${type}/${token}/`;
+
+		const templatePath = path.join(__dirname, '..', 'templates', 'emailTemplate.html');
 		const emailTemplate = fs.readFileSync(templatePath, 'utf-8');
 		const renderedTemplate = ejs.render(emailTemplate, {
 			link,
-			name
+			name,
+			... isActivation? ACTIVATE : PASSWORD
 		});
 
 		const mailOptions = {
