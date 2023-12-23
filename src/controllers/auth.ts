@@ -157,19 +157,21 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
     const accessToken = jwt.sign(
         {
-            email: user.email,
-            uid: user._id,
+            'user': {
+                'email': user.email,
+                'uid': user._id,
+            },
         },
         secreteAt,
-        { expiresIn: '15s' },
+        { expiresIn: '30m' },
     );
 
     const refreshToken = jwt.sign(
         {
-            email: user.email,
+            'email': user.email,
         },
         secreteRt,
-        { expiresIn: '15s' },
+        { expiresIn: '30d' },
     );
 
     res.cookie('jwt', refreshToken, {
@@ -183,17 +185,20 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
-    const { jwt: refreshToken } = req.cookies;
+    const cookies = req.cookies;
+
+    if (!cookies?.jwt) {
+        res.status(401).json({ message: 'Missing cookie.' });
+        return;
+    }
+
+    const refreshToken = cookies.jwt;
+
     const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
     const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
 
     if (!secreteAt || !secreteRt) {
         res.status(500).json({ message: 'Internal server error.' });
-        return;
-    }
-
-    if (!refreshToken) {
-        res.status(401).json({ message: 'Missing cookie.' });
         return;
     }
 
@@ -208,14 +213,16 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
             const user = AuthUser.findById(decoded.uid);
             const accessToken = jwt.sign(
                 {
-                    email: user.email,
-                    uid: user._id,
+                    'user': {
+                        'email': user.email,
+                        'uid': user._id,
+                    },
                 },
                 secreteAt,
-                { expiresIn: '15s' },
+                { expiresIn: '30m' },
             );
 
-            res.json(accessToken);
+            res.json({ accessToken });
         },
     );
 });
