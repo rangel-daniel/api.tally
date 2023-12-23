@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import { EmailPasswordAuth, EmailPasswordUser, User } from '../../models/User';
-import { sendEmail } from '../../utils/email';
-import Secrete from '../../models/secrete';
+import { EmailPasswordAuth, EmailPasswordUser, User } from '../models/User';
+import { sendEmail } from '../utils/email';
+import Secrete from '../models/secrete';
 import path from 'path';
 
 const emailUser = async (type: 'activate'|'password', user: EmailPasswordUser) =>{

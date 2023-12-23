@@ -2,8 +2,9 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { connection } from 'mongoose';
 
-import { root, wildcard } from './routes/rootRoutes';
-import auth from './routes/authRoutes';
+import { root, wildcard } from './routes/root';
+import auth from './routes/auth';
+import poll from './routes/poll';
 
 import connectDb from './config/connectDb';
 import errorHandler from './middleware/errorHandler';
@@ -20,6 +21,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/', root);
 app.use('/auth', auth);
+app.use('/poll', poll)
 app.use('*', wildcard);
 
 app.use(errorHandler);
