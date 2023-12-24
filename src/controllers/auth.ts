@@ -168,7 +168,10 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
     const refreshToken = jwt.sign(
         {
-            'email': user.email,
+            'user': {
+                'email': user.email,
+                'uid': user._id,
+            },
         },
         secreteRt,
         { expiresIn: '30d' },
@@ -206,11 +209,15 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         refreshToken,
         secreteRt,
         async (error: JsonWebTokenError | null, decoded: any) => {
-            if (error) {
+            const { uid } = decoded.user;
+
+            if (error|| !uid) {
                 res.status(403).json({ message: 'Missing cookie.' });
                 return;
             }
-            const user = AuthUser.findById(decoded.uid);
+
+            const user = await AuthUser.findById(uid);
+
             const accessToken = jwt.sign(
                 {
                     'user': {

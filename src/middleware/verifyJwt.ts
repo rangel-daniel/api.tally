@@ -2,12 +2,10 @@ import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 
+export type AuthRequest = Request & { user?: { email: string; uid: string } };
+
 export const verifyJwt = asyncHandler(
-    async (
-        req: Request & { user?: { email: string; uid: string } },
-        res: Response,
-        next,
-    ) => {
+    async (req: AuthRequest, res: Response, next) => {
         const authHeader = req.headers.authorization;
 
         if (!authHeader?.startsWith('Bearer ')) {
