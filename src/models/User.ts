@@ -1,34 +1,38 @@
-import { Model, model, Schema, Types } from 'mongoose';
+import { model, Schema, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
 import isEmail from 'validator/lib/isEmail';
 import isStrongPassword from 'validator/lib/isStrongPassword';
 
-interface GuestUserDoc extends Document {
+const ONE_MONTH = 60 * 60 * 30;
+
+interface UserDoc extends Document {
     _id: Types.ObjectId;
-    tokens: Array<string>;
 }
 
-const guestUserSchema = new Schema<GuestUserDoc, Model<GuestUserDoc>>(
-    {
-        tokens: {
-            type: [String],
-            default: [],
-        },
-    },
-    { timestamps: true },
-);
+interface GuestUserDoc extends UserDoc {
+    expireAt: Date;
+}
 
-export interface AuthUserDoc extends GuestUserDoc {
+export interface AuthUserDoc extends UserDoc {
     email: string;
     tempEmail?: string;
     password: string;
     name: string;
 }
 
+const userSchema = new Schema<UserDoc>({}, { timestamps: true });
+
+const guestUserSchema = new Schema<GuestUserDoc>(
+    {
+        expireAt: { type: Date, expires: ONE_MONTH, default: Date.now },
+    },
+    { timestamps: true },
+);
+
 const authUserSchema = new Schema<AuthUserDoc>({
     email: {
         type: String,
-        required: [true, 'You must enter an email.'],
+        required: [true, 'Missing email.'],
         unique: true,
         trim: true,
         validate: {
@@ -51,7 +55,7 @@ const authUserSchema = new Schema<AuthUserDoc>({
     },
     password: {
         type: String,
-        required: [true, 'You must enter a password.'],
+        required: [true, 'Missing password.'],
         validate: {
             validator: (value: string) => {
                 return isStrongPassword(value);
@@ -61,7 +65,7 @@ const authUserSchema = new Schema<AuthUserDoc>({
     },
     name: {
         type: String,
-        required: [true, 'You must enter a name.'],
+        required: [true, 'Missing name.'],
         trim: true,
         validate: {
             validator: (value: string) => {
@@ -84,8 +88,9 @@ authUserSchema.pre('save', async function (next) {
     }
 });
 
-const User = model('User', guestUserSchema);
+const User = model('User', userSchema);
 
-const AuthUser = User.discriminator('email_password', authUserSchema);
+const AuthUser = User.discriminator('AuthUser', authUserSchema);
+const GuestUser = User.discriminator('GuestUser', guestUserSchema);
 
-export { User, AuthUser };
+export { User, AuthUser, GuestUser };
