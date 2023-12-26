@@ -10,6 +10,7 @@ import connectDb from './config/connectDb';
 import errorHandler from './middleware/errorHandler';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import requestIp from 'request-ip';
 
 const PORT = 3000;
 const app = express();
@@ -18,6 +19,7 @@ dotenv.config();
 connectDb();
 app.use(express.json());
 app.use(cookieParser());
+app.use(requestIp.mw());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
