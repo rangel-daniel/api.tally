@@ -22,12 +22,9 @@ export interface AuthUserDoc extends UserDoc {
 
 const userSchema = new Schema<UserDoc>({}, { timestamps: true });
 
-const guestUserSchema = new Schema<GuestUserDoc>(
-    {
-        expireAt: { type: Date, expires: ONE_MONTH, default: Date.now },
-    },
-    { timestamps: true },
-);
+const guestUserSchema = new Schema<GuestUserDoc>({
+    expireAt: { type: Date, expires: ONE_MONTH, default: Date.now },
+});
 
 const authUserSchema = new Schema<AuthUserDoc>({
     email: {
@@ -90,7 +87,7 @@ authUserSchema.pre('save', async function (next) {
 
 const User = model('User', userSchema);
 
-const AuthUser = User.discriminator('AuthUser', authUserSchema);
-const GuestUser = User.discriminator('GuestUser', guestUserSchema);
+const AuthUser = User.discriminator('auth', authUserSchema);
+const GuestUser = User.discriminator('guest', guestUserSchema);
 
 export { User, AuthUser, GuestUser };

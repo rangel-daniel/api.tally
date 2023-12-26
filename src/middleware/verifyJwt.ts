@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 
-export type AuthRequest = Request & { user?: { email: string; uid: string } };
+export type AuthRequest = Request & { user?: { email?: string; uid: string } };
 
 export const verifyJwt = asyncHandler(
     async (req: AuthRequest, res: Response, next) => {

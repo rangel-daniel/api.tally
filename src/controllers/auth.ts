@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import { AuthUser, AuthUserDoc, User } from '../models/User';
+import { AuthUser, AuthUserDoc, GuestUser, User } from '../models/User';
 import { sendEmail } from '../utils/email';
 import Secrete from '../models/secrete';
 import path from 'path';
@@ -16,15 +16,38 @@ const emailUser = async (type: 'activate' | 'password', user: AuthUserDoc) => {
     await sendEmail(userInfo, secrete);
 };
 
+/**
+ * @description
+ * if _id is passed in the request body, it'll try to turn a guest user to an
+ * authenticated user.
+ * */
 export const registerUser = asyncHandler(
     async (req: Request, res: Response) => {
-        const { email: _email, name: _name, password } = req.body;
-        const user = await AuthUser.create({
-            email: _email,
-            name: _name,
+        const { email, name, password, _id } = req.body;
+
+        if (!email || !name || !password) {
+            res.status(400).json({ message: 'Missing data.' });
+            return;
+        }
+
+        const info = {
+            email,
+            name,
             password,
             secrete: { type: 'activate' },
-        });
+        };
+
+        if (_id) {
+            const guest = await GuestUser.findByIdAndDelete(_id);
+            if (!guest) {
+                res.status(404).json({ message: 'User does not exist.' });
+                return;
+            }
+        }
+
+        const user = await AuthUser.create(_id ? { ...info, _id } : info);
+
+        console.log(user);
 
         await emailUser('activate', user);
 
@@ -125,11 +148,39 @@ export const forgotPassword = asyncHandler(
     },
 );
 
+const guestLogin = async (res: Response, secrete: string) => {
+    const user = await GuestUser.create({});
+
+    const accessToken = jwt.sign(
+        {
+            'user': {
+                'uid': user._id,
+            },
+        },
+        secrete,
+        { expiresIn: '30d' },
+    );
+
+    res.json({ accessToken });
+};
+
+/**
+ * @description
+ * if email and password are missing, the user will login as guest.
+ * */
 export const login = asyncHandler(async (req: Request, res: Response) => {
+    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
+    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
+
+    if (!secreteAt || !secreteRt) {
+        res.status(500).json({ message: 'Internal server error.' });
+        return;
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
-        res.status(400).json({ message: 'All fields are required.' });
+        guestLogin(res, secreteAt);
         return;
     }
 
@@ -144,14 +195,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
     if (!match) {
         res.status(401).json({ message: 'Invalid password.' });
-        return;
-    }
-
-    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
-    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
-
-    if (!secreteAt || !secreteRt) {
-        res.status(500).json({ message: 'Internal server error.' });
         return;
     }
 
@@ -211,7 +254,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         async (error: JsonWebTokenError | null, decoded: any) => {
             const { uid } = decoded.user;
 
-            if (error|| !uid) {
+            if (error || !uid) {
                 res.status(403).json({ message: 'Missing cookie.' });
                 return;
             }
