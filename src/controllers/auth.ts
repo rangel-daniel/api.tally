@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/verifyJwt';
 import asyncHandler from 'express-async-handler';
 import { AuthUser, AuthUserDoc, GuestUser, User } from '../models/User';
 import { sendEmail } from '../utils/email';
@@ -6,8 +7,18 @@ import Secrete from '../models/secrete';
 import bcrypt from 'bcrypt';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 
+export const isAuth = (req: AuthRequest) => {
+    return req.user ? req.user?.email && req.user.uid : false;
+};
 const emailUser = async (type: 'activate' | 'password', user: AuthUserDoc) => {
-    const { _id: uid, email, name } = user;
+    const { _id: uid, tempEmail, name } = user;
+    let email = user.email;
+
+    // True when email is changed and needs to be confirmed.
+    if (type === 'activate' && tempEmail && tempEmail !== 'new') {
+        email = tempEmail;
+    }
+
     const userInfo = { uid, email, name };
 
     const secrete = await Secrete.create({ type, uid });
@@ -33,7 +44,6 @@ export const registerUser = asyncHandler(
             email,
             name,
             password,
-            secrete: { type: 'activate' },
         };
 
         if (_id) {
@@ -84,7 +94,7 @@ export const activateAccount = asyncHandler(
     },
 );
 
-export const changePassword = asyncHandler(
+export const changePasswordWithToken = asyncHandler(
     async (req: Request, res: Response) => {
         const { token } = req.params;
         const { password } = req.body;
@@ -114,6 +124,59 @@ export const changePassword = asyncHandler(
 
         await secrete.deleteOne();
 
+        res.json({ message: 'Password updated.' });
+    },
+);
+
+export const updateEmail = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+        const { email } = req.body;
+        if (!req?.user?.email || !req?.user?.uid || !email) {
+            res.status(400).json({ message: 'Missing data.' });
+            return;
+        }
+
+        const user = await AuthUser.findById(req.user.uid);
+
+        if (!user) {
+            res.status(404).json({ message: 'User not found.' });
+            return;
+        }
+
+        if (email != user.email) {
+            user.tempEmail = email;
+            const updatedUser = await user.save();
+            await emailUser('activate', updatedUser);
+
+            logout(req, res, () => {});
+        }
+
+        res.json({ message: 'Email updated.' });
+    },
+);
+
+export const updatePassword = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+        const { password } = req.body;
+
+        if (!req?.user?.email || !req?.user?.uid || !password) {
+            res.status(400).json({ message: 'Missing data.' });
+            return;
+        }
+
+        const user = await AuthUser.findById(req.user.uid);
+
+        if (!user) {
+            res.status(404).json({ message: 'User not found.' });
+            return;
+        }
+
+        user.password = password;
+
+        const updatedUser = await user.save();
+        await emailUser('activate', updatedUser);
+
+        logout(req, res, () => {});
         res.json({ message: 'Password updated.' });
     },
 );
