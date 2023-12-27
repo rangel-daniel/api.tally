@@ -3,7 +3,6 @@ import asyncHandler from 'express-async-handler';
 import { AuthUser, AuthUserDoc, GuestUser, User } from '../models/User';
 import { sendEmail } from '../utils/email';
 import Secrete from '../models/secrete';
-import path from 'path';
 import bcrypt from 'bcrypt';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 
@@ -47,8 +46,6 @@ export const registerUser = asyncHandler(
 
         const user = await AuthUser.create(_id ? { ...info, _id } : info);
 
-        console.log(user);
-
         await emailUser('activate', user);
 
         res.json({ message: 'Successful registration!' });
@@ -89,31 +86,21 @@ export const activateAccount = asyncHandler(
 
 export const changePassword = asyncHandler(
     async (req: Request, res: Response) => {
-        const { method } = req;
         const { token } = req.params;
+        const { password } = req.body;
 
-        const secrete = await Secrete.findOne({ token }).lean();
+        if (!password || !token) {
+            res.status(400).json({ message: 'Missing data.' });
+            return;
+        }
+
+        const secrete = await Secrete.findOne({ token });
         const validUser = await User.exists({ _id: secrete?.uid });
 
         if (!secrete || secrete.type !== 'password' || !validUser) {
-            res.status(404).json({ message: 'Invalid token.' });
+            res.status(400).json({ message: 'Invalid token.' });
             return;
         }
-
-        if (method === 'GET') {
-            res.sendFile(
-                path.join(
-                    __dirname,
-                    '..',
-                    '..',
-                    'templates',
-                    'changePassword.html',
-                ),
-            );
-            return;
-        }
-
-        const { password } = req.body;
 
         const user = await AuthUser.findById(secrete.uid).select('password');
 
@@ -125,9 +112,9 @@ export const changePassword = asyncHandler(
         user.password = password;
         await user.save();
 
-        await Secrete.deleteOne({ _id: secrete._id });
+        await secrete.deleteOne();
 
-        res.json({ message: 'Password updaed.' });
+        res.json({ message: 'Password updated.' });
     },
 );
 
@@ -224,7 +211,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
     res.json({ accessToken });

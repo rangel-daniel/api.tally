@@ -22,8 +22,8 @@ router.route('/signup').post(registerUser);
 
 router.route('/forgot-password').post(forgotPassword);
 
-router.route('/activate/:token').get(activateAccount);
+router.route('/activate/:token').post(activateAccount);
 
-router.route('/password/:token').get(changePassword).post(changePassword);
+router.route('/password/:token').post(changePassword);
 
 export default router;
