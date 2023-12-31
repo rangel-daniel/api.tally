@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
 
-export type AuthRequest = Request & { user?: { email?: string; uid: string } };
+export type AuthRequest = Request & { isAuth?: boolean; uid?: string };
 
 export const verifyJwt = asyncHandler(
     async (req: AuthRequest, res: Response, next) => {
@@ -27,12 +27,16 @@ export const verifyJwt = asyncHandler(
             token,
             secreteAt,
             (error: JsonWebTokenError | null, decoded: any) => {
-                if (error || !decoded.user) {
+                const { isAuth, uid } = decoded;
+
+                if (error || !uid || typeof isAuth !== 'boolean') {
                     res.status(403).json({ message: 'Invalid token' });
                     return;
                 }
 
-                req.user = decoded.user;
+                req.isAuth = isAuth;
+                req.uid = uid;
+
                 next();
             },
         );

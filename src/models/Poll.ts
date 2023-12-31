@@ -23,10 +23,10 @@ const uidField = {
 export interface PollDocument extends Document {
     admin: Types.ObjectId;
     question: string;
-    choices: {
+    opts: {
         opt: string;
-        tally: number;
     }[];
+    users: number;
     settings: {
         deadline?: Date;
         reqLogin: boolean;
@@ -34,11 +34,6 @@ export interface PollDocument extends Document {
         allowEdit: boolean;
         allowMultiple: boolean;
     };
-    voters: {
-        uid: Types.ObjectId;
-        name?: string;
-        sel: Types.ObjectId[];
-    }[];
 }
 
 const pollSchema = new Schema<PollDocument>(
@@ -49,16 +44,13 @@ const pollSchema = new Schema<PollDocument>(
             validate: strInputValidator,
             required: true,
         },
-        choices: {
+        opts: {
             type: [
                 new Schema({
                     opt: {
                         type: String,
                         validator: strInputValidator,
-                    },
-                    tally: {
-                        type: Number,
-                        default: 0,
+                        required: true,
                     },
                 }),
             ],
@@ -68,6 +60,11 @@ const pollSchema = new Schema<PollDocument>(
                 },
                 message: 'Polls require 2-10 choices.',
             },
+            required: true,
+        },
+        users: {
+            type: Number,
+            default: 0,
         },
         settings: {
             type: new Schema(
@@ -96,20 +93,6 @@ const pollSchema = new Schema<PollDocument>(
             ),
             default: () => ({}),
         },
-        voters: [
-            new Schema(
-                {
-                    uid: uidField,
-                    name: {
-                        type: String,
-                    },
-                    sel: {
-                        type: [Types.ObjectId],
-                    },
-                },
-                { _id: false },
-            ),
-        ],
     },
     { timestamps: true },
 );

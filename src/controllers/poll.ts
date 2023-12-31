@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { Poll } from '../models/Poll';
-import asyncHandler from 'express-async-handler';
 import { AuthRequest } from '../middleware/verifyJwt';
+import asyncHandler from 'express-async-handler';
 
 export const createPoll = asyncHandler(
     async (req: AuthRequest, res: Response) => {
-        const admin = req.user?.uid;
+        const { uid: admin } = req;
 
         if (!admin) {
             res.status(400).json({ message: 'Missing user.' });
@@ -22,7 +22,7 @@ export const createPoll = asyncHandler(
 
 export const getPolls = asyncHandler(
     async (req: AuthRequest, res: Response) => {
-        const admin = req.user?.uid;
+        const { uid: admin } = req;
 
         if (!admin) {
             res.status(400).json({ message: 'Missing user.' });
@@ -40,8 +40,8 @@ export const getPolls = asyncHandler(
 );
 
 export const rmPoll = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const admin = req.user?.uid;
     const { pid } = req.params;
+    const { uid: admin } = req;
 
     if (!admin || !pid) {
         res.status(400).json({ message: 'Missing data.' });
