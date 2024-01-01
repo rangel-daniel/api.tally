@@ -8,7 +8,7 @@ const strInputValidator = {
     message: 'String is empty or exceeds maximum length of 255 characters.',
 };
 
-const uidField = {
+export const uidField = {
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
@@ -24,6 +24,7 @@ export interface PollDocument extends Document {
     admin: Types.ObjectId;
     question: string;
     opts: {
+        _id: Types.ObjectId;
         opt: string;
     }[];
     users: number;
