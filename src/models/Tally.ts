@@ -4,7 +4,7 @@ import { uidField } from './Poll';
 interface TallyDoc extends Document {
     uid: Schema.Types.ObjectId;
     pid: Schema.Types.ObjectId;
-    opts: Schema.Types.ObjectId;
+    opts: [Schema.Types.ObjectId];
     ip: string;
     name?: string;
 }

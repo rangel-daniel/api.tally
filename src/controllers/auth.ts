@@ -153,7 +153,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         { expiresIn: '30d' },
     );
 
-    res.cookie('session', refreshToken, {
+    res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'none',

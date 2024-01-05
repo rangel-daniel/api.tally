@@ -5,13 +5,16 @@ import { AuthRequest } from '../middleware/verifyJwt';
 import { Response } from 'express';
 import { Poll } from '../models/Poll';
 import { Tally } from '../models/Tally';
+import { Types } from 'mongoose';
 
 export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { clientIp: ip, uid, isAuth } = req;
     const { pid, name } = req.body;
-    let opts = req.body;
+    let opts = req.body.opts;
 
     if (!opts || !opts.length || !isMongoId(pid) || !uid || !ip) {
+        console.log(!opts, !opts.length, !isMongoId(pid), !uid, !ip);
+
         res.status(400).json({ message: 'Missing data.' });
         return;
     }
@@ -23,31 +26,22 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
         return;
     }
 
-    const { settings, opts: options } = poll;
+    const { settings } = poll;
+    const options = poll.opts.map((opt) => opt._id.toString());
 
     if (settings.reqLogin && !isAuth) {
         res.status(400).json({
             message:
-                ' User account required. Please sign up or log in to vote. ',
+                'User account required. Please sign up or log in to vote.',
         });
         return;
     }
 
-    if (!settings.reqLogin) {
-        const exists = await Tally.exists({ ip });
-        if (exists) {
-            res.status(409).json({
-                message:
-                    'Someone on your network has already participated in this poll.',
-            });
-            return;
-        }
-    }
-
     opts = [...new Set(opts)];
-    opts = options.filter((opt) => !opts.includes(opt._id.toString()));
+    opts = opts.filter((opt: string) => options.includes(opt));
 
     if (!opts.length || (opts.length > 1 && !settings.allowMultiple)) {
+        console.log(opts, `Allow multiple: ${settings.allowMultiple}`);
         res.status(400).json({ message: 'Invalid options.' });
         return;
     }
@@ -84,7 +78,22 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
         return;
     }
 
+    if (!settings.reqLogin) {
+        const exists = await Tally.exists({ ip });
+        if (exists) {
+            res.status(409).json({
+                message:
+                    'Someone on your network has already participated in this poll.',
+            });
+            return;
+        }
+    }
+
     await Tally.create({ uid, pid, opts, name, ip });
+
+    await Poll.findOneAndUpdate(new Types.ObjectId(pid), {
+        $inc: { users: 1 },
+    });
 
     res.json({ message: 'Vote casted.' });
 });

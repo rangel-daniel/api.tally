@@ -12,9 +12,9 @@ export const createPoll = asyncHandler(
             return;
         }
 
-        const { question, choices, settings } = req.body;
+        const { question, opts, settings } = req.body;
 
-        await Poll.create({ admin, question, choices, settings });
+        await Poll.create({ admin, question, opts, settings });
 
         res.json({ message: 'Poll created!' });
     },
