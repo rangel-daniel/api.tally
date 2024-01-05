@@ -56,8 +56,8 @@ const pollSchema = new Schema<PollDocument>(
                 }),
             ],
             validate: {
-                validator: function (value: any) {
-                    return value && value.length > 1 && value.length <= 10;
+                validator: (value: any) => {
+                    return value.length > 1 && value.length <= 10;
                 },
                 message: 'Polls require 2-10 choices.',
             },
