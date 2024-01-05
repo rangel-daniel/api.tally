@@ -27,9 +27,18 @@ export const verifyJwt = asyncHandler(
             token,
             secreteAt,
             (error: JsonWebTokenError | null, decoded: any) => {
+                if (error) {
+                    if (error.name === 'TokenExpiredError') {
+                        res.status(401).json({ message: 'Token has expired.' });
+                    } else {
+                        res.status(403).json({ message: 'Invalid token.' });
+                    }
+                    return;
+                }
+
                 const { isAuth, uid } = decoded;
 
-                if (error || !uid || typeof isAuth !== 'boolean') {
+                if (!uid || typeof isAuth !== 'boolean') {
                     res.status(403).json({ message: 'Invalid token' });
                     return;
                 }
