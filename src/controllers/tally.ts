@@ -5,7 +5,22 @@ import { AuthRequest } from '../middleware/verifyJwt';
 import { Response } from 'express';
 import { Poll } from '../models/Poll';
 import { Tally } from '../models/Tally';
-import { Types } from 'mongoose';
+import { Server } from 'socket.io';
+
+const emitUpdate = async (req: AuthRequest, pid: string, reqNames: boolean) => {
+    const io: Server | undefined = req.app.get('io');
+
+    if (io)
+        try {
+            const data = await Tally.find({ pid })
+                .select('updatedAt opts' + reqNames ? ' name' : '')
+                .lean();
+
+            if (data) io.to(pid).emit('update', data);
+        } catch (error) {
+            console.error('Could not emit update.', error);
+        }
+};
 
 export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { clientIp: ip, uid, isAuth } = req;
@@ -13,8 +28,6 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
     let opts = req.body.opts;
 
     if (!opts || !opts.length || !isMongoId(pid) || !uid || !ip) {
-        console.log(!opts, !opts.length, !isMongoId(pid), !uid, !ip);
-
         res.status(400).json({ message: 'Missing data.' });
         return;
     }
@@ -31,8 +44,7 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
 
     if (settings.reqLogin && !isAuth) {
         res.status(400).json({
-            message:
-                'User account required. Please sign up or log in to vote.',
+            message: 'User account required. Please sign up or log in to vote.',
         });
         return;
     }
@@ -41,7 +53,6 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
     opts = opts.filter((opt: string) => options.includes(opt));
 
     if (!opts.length || (opts.length > 1 && !settings.allowMultiple)) {
-        console.log(opts, `Allow multiple: ${settings.allowMultiple}`);
         res.status(400).json({ message: 'Invalid options.' });
         return;
     }
@@ -75,6 +86,7 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
         await tally.save();
 
         res.json({ message: 'Vote updated.' });
+        await emitUpdate(req, pid, settings.reqNames);
         return;
     }
 
@@ -91,9 +103,10 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
 
     await Tally.create({ uid, pid, opts, name, ip });
 
-    await Poll.findOneAndUpdate(new Types.ObjectId(pid), {
+    await Poll.findByIdAndUpdate(pid, {
         $inc: { users: 1 },
     });
 
     res.json({ message: 'Vote casted.' });
+    await emitUpdate(req, pid, settings.reqNames);
 });

@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import { connection } from 'mongoose';
+import http from 'http';
 
 import { root, wildcard } from './routes/root';
 import auth from './routes/auth';
@@ -11,9 +12,14 @@ import errorHandler from './middleware/errorHandler';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import requestIp from 'request-ip';
+import socketIO from 'socket.io';
 
 const PORT = 3000;
 const app = express();
+const server = http.createServer(app);
+const io = new socketIO.Server(server);
+
+app.set('io', io);
 
 dotenv.config();
 connectDb();
@@ -32,6 +38,13 @@ app.use(errorHandler);
 
 connection.once('open', () => {
     console.log('DB connection successful!');
+
+    io.on('connection', (socket: socketIO.Socket) => {
+        console.log('New user');
+        socket.on('joinPoll', (pid: string) => {
+            socket.join(pid);
+        });
+    });
 
     app.listen(PORT, () => {
         console.log(`${process.env.NODE_ENV} Server running on PORT ${PORT}`);

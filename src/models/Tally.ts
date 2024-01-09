@@ -9,32 +9,35 @@ interface TallyDoc extends Document {
     name?: string;
 }
 
-const tallySchema = new Schema<TallyDoc>({
-    uid: uidField,
-    pid: {
-        type: Schema.Types.ObjectId,
-        ref: 'Poll',
-        required: true,
-    },
-    opts: {
-        type: [Schema.Types.ObjectId],
-        ref: 'Poll.opts',
-        required: true,
-    },
-    name: {
-        type: String,
-        trim: true,
-        validate: {
-            validator: (value: string) => {
-                return value.length && value.length <= 50;
+const tallySchema = new Schema<TallyDoc>(
+    {
+        uid: uidField,
+        pid: {
+            type: Schema.Types.ObjectId,
+            ref: 'Poll',
+            required: true,
+        },
+        opts: {
+            type: [Schema.Types.ObjectId],
+            ref: 'Poll.opts',
+            required: true,
+        },
+        name: {
+            type: String,
+            trim: true,
+            validate: {
+                validator: (value: string) => {
+                    return value.length && value.length <= 50;
+                },
+                message: 'Invalid name.',
             },
-            message: 'Invalid name.',
+        },
+        ip: {
+            type: String,
+            required: [true, 'Missing IP address.'],
         },
     },
-    ip: {
-        type: String,
-        required: [true, 'Missing IP address.'],
-    },
-});
+    { timestamps: true },
+);
 
 export const Tally = model('Tally', tallySchema);

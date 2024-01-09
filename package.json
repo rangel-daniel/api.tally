@@ -31,6 +31,7 @@
     "mongoose": "^8.0.0",
     "nodemailer": "^6.9.7",
     "request-ip": "^3.3.0",
+    "socket.io": "^4.7.3",
     "uuid": "^9.0.1",
     "validator": "^13.11.0"
   },
@@ -43,6 +44,7 @@
     "@types/node": "^20.9.0",
     "@types/nodemailer": "^6.4.14",
     "@types/request-ip": "^0.0.41",
+    "@types/socket.io": "^3.0.2",
     "@types/uuid": "^9.0.7",
     "@types/validator": "^13.11.6",
     "@typescript-eslint/eslint-plugin": "^6.13.1",
