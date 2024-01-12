@@ -39,8 +39,6 @@ const errorHandler = async (
         const errors = error.errors;
 
         for (const key in errors) {
-            console.error(key, '\t', errors[key]);
-
             body[key] = (errors[key] as MongoError.ValidatorError).properties
                 ?.message;
         }
