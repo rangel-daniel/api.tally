@@ -19,23 +19,20 @@ import { verifyJwt } from '../middleware/verifyJwt';
 const router = Router();
 
 router.route('/').post(loginLimiter, login);
+router.route('/refresh').get(refresh);
+router.route('/signup').post(registerUser);
 router.route('/logout').post(logout);
 
-router.route('/update-password').post(verifyJwt, updatePassword);
-router.route('/update-email').post(verifyJwt, updateEmail);
-router.route('/update-name').post(verifyJwt, updateName);
-router.route('/delete-account').post(verifyJwt, deleteAccount);
+router.route('/update-password').patch(verifyJwt, updatePassword);
+router.route('/update-email').patch(verifyJwt, updateEmail);
+router.route('/update-name').patch(verifyJwt, updateName);
+router.route('/delete-account').delete(verifyJwt, deleteAccount);
 
 router.route('/forgot-password').post(forgotPassword);
-
-router.route('/signup').post(registerUser);
-
-router.route('/refresh').get(refresh);
+router.route('/password/:token').patch(changePasswordWithToken);
 
 router.route('/resend-email').post(resendEmail);
+router.route('/activate/:token').patch(activateAccount);
 
-router.route('/activate/:token').post(activateAccount);
-
-router.route('/password/:token').post(changePasswordWithToken);
 
 export default router;

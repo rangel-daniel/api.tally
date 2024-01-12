@@ -11,9 +11,9 @@ const emailUser = async (type: 'activate' | 'password', user: AuthUserDoc) => {
     const { _id: uid, tempEmail, name } = user;
     let email = user.email;
 
-    // True when email is changed and needs to be confirmed.
-    if (type === 'activate' && tempEmail && tempEmail !== 'new') {
-        email = tempEmail;
+    if (type === 'activate') {
+        if (!tempEmail) return;
+        if (tempEmail !== 'new') email = tempEmail;
     }
 
     const userInfo = { uid, email, name };
@@ -103,7 +103,7 @@ const guestLogin = async (res: Response, secrete: string) => {
 
 /**
  * @description
- * if email and password are missing, the user will login as guest.
+ * If email and password are missing, the user will login as guest.
  * */
 export const login = asyncHandler(async (req: Request, res: Response) => {
     const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
@@ -163,6 +163,10 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     res.json({ accessToken });
 });
 
+/**
+ * @description
+ * Used for initial account activation and to confirm new email.
+ * */
 export const activateAccount = asyncHandler(
     async (req: Request, res: Response) => {
         const { token } = req.params;
