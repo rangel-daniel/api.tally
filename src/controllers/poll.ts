@@ -9,7 +9,7 @@ export const createPoll = asyncHandler(
         const { uid: admin } = req;
 
         if (!admin) {
-            res.status(400).json({ message: 'Missing user.' });
+            res.status(400).json({ message: 'Missing data.' });
             return;
         }
 
@@ -20,6 +20,52 @@ export const createPoll = asyncHandler(
         res.json({ message: 'Poll created!' });
     },
 );
+
+export const editPoll = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+        const { uid: admin } = req;
+        const { pid: _id, question, opts, settings } = req.body;
+
+        if (!admin || !_id || !(settings || opts || question)) {
+            res.status(400).json({ message: 'Missing data.' });
+            return;
+        }
+
+        const poll = await Poll.findOne({ _id, admin });
+
+        if (!poll) {
+            res.status(404).json({ message: 'Poll not found.' });
+            return;
+        }
+
+        if (question) poll.question = question;
+        if (opts) poll.opts = opts;
+        if (settings) poll.settings = settings;
+
+        await poll.save();
+
+        res.json({ message: 'Poll updated!' });
+    },
+);
+
+export const rmPoll = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { pid } = req.body;
+    const { uid: admin } = req;
+
+    if (!admin || !pid) {
+        res.status(400).json({ message: 'Missing data.' });
+        return;
+    }
+
+    const { deletedCount } = await Poll.deleteOne({ admin, _id: pid });
+
+    if (!deletedCount) {
+        res.status(404).json({ message: 'Poll does not exist.' });
+        return;
+    }
+
+    res.json({ message: 'Poll deleted.' });
+});
 
 export const getPolls = asyncHandler(
     async (req: AuthRequest, res: Response) => {
@@ -39,25 +85,6 @@ export const getPolls = asyncHandler(
         res.json(polls);
     },
 );
-
-export const rmPoll = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { pid } = req.params;
-    const { uid: admin } = req;
-
-    if (!admin || !pid) {
-        res.status(400).json({ message: 'Missing data.' });
-        return;
-    }
-
-    const { deletedCount } = await Poll.deleteOne({ admin, _id: pid });
-
-    if (!deletedCount) {
-        res.status(404).json({ message: 'Poll does not exist.' });
-        return;
-    }
-
-    res.json({ message: 'Poll deleted.' });
-});
 
 export const resetPoll = asyncHandler(
     async (req: AuthRequest, res: Response) => {
@@ -84,7 +111,7 @@ export const resetPoll = asyncHandler(
 );
 
 export const getPoll = asyncHandler(async (req: Request, res: Response) => {
-    const { pid } = req.params;
+    const { pid } = req.body;
 
     const poll = await Poll.findById(pid).lean();
 
