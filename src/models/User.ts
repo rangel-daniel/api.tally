@@ -66,7 +66,7 @@ const authUserSchema = new Schema<AuthUserDoc>({
         trim: true,
         validate: {
             validator: (value: string) => {
-                return value.length && value.length <= 50;
+                return value.length>=3 && value.length <= 50;
             },
             message: 'Invalid name.',
         },
