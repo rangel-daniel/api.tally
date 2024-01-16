@@ -82,7 +82,7 @@ export const registerUser = asyncHandler(
 
         await emailUser('activate', user);
 
-        res.json({ message: 'Successful registration!' });
+        login(req, res, () => {});
     },
 );
 
@@ -124,7 +124,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     const user = await AuthUser.findOne({ email }).lean();
 
     if (!user) {
-        res.status(401).json({ message: 'User not found.' });
+        res.status(404).json({ message: 'User not found.' });
         return;
     }
 
