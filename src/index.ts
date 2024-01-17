@@ -14,6 +14,7 @@ import path from 'path';
 import requestIp from 'request-ip';
 import socketIO from 'socket.io';
 import cors from 'cors';
+import { corsOptions } from './config/allowedOrigins';
 
 const PORT = 3000;
 const app = express();
@@ -24,7 +25,7 @@ app.set('io', io);
 
 dotenv.config();
 connectDb();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use(requestIp.mw());
