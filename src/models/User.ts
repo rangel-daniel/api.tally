@@ -9,7 +9,7 @@ interface UserDoc extends Document {
     _id: Types.ObjectId;
 }
 
-interface GuestUserDoc extends UserDoc {
+export interface GuestUserDoc extends UserDoc {
     expireAt: Date;
 }
 
@@ -66,7 +66,7 @@ const authUserSchema = new Schema<AuthUserDoc>({
         trim: true,
         validate: {
             validator: (value: string) => {
-                return value.length>=3 && value.length <= 50;
+                return value.length >= 3 && value.length <= 50;
             },
             message: 'Invalid name.',
         },
