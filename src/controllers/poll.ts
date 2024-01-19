@@ -96,7 +96,7 @@ export const resetPoll = asyncHandler(
             return;
         }
 
-        const poll = await Poll.findOne({ _id: pid, admin: uid });
+        const poll = await Poll.exists({ _id: pid, admin: uid });
 
         if (!poll) {
             res.status(404).json({ message: 'Poll not found.' });
@@ -104,8 +104,6 @@ export const resetPoll = asyncHandler(
         }
 
         await Tally.deleteMany({ pid });
-        poll.users = 0;
-        await poll.save();
         res.json({ message: 'Poll reset successful.' });
     },
 );

@@ -147,9 +147,6 @@ export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
     }
 
     await Tally.create({ uid, pid, opts, name, ip });
-    await Poll.findByIdAndUpdate(pid, {
-        $inc: { users: 1 },
-    });
 
     res.json({ message: 'Vote casted.' });
     await emitUpdate(io, poll);

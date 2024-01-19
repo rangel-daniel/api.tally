@@ -1,11 +1,18 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/verifyJwt';
 import asyncHandler from 'express-async-handler';
-import { AuthUser, AuthUserDoc, GuestUser, User } from '../models/User';
+import {
+    AuthUser,
+    AuthUserDoc,
+    GuestUser,
+    GuestUserDoc,
+    User,
+} from '../models/User';
 import { sendEmail } from '../utils/email';
 import Secrete from '../models/secrete';
 import bcrypt from 'bcrypt';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
+import { Types } from 'mongoose';
 
 const emailUser = async (type: 'activate' | 'password', user: AuthUserDoc) => {
     const { _id: uid, tempEmail, name } = user;
@@ -82,23 +89,56 @@ export const registerUser = asyncHandler(
 
         await emailUser('activate', user);
 
-        res.json({ message: 'Successful registration!' });
+        login(req, res, () => {});
     },
 );
 
-const guestLogin = async (res: Response, secrete: string) => {
-    const user = await GuestUser.create({});
+const genRefreshToken = (
+    uid: Types.ObjectId,
+    isAuth: boolean = false,
+    isEmailVerified: boolean = false,
+): string | undefined => {
+    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
 
-    const accessToken = jwt.sign(
+    if (!secreteRt) {
+        return undefined;
+    }
+
+    const refreshToken = jwt.sign(
         {
-            'isAuth': false,
-            'uid': user._id,
+            'isAuth': isAuth,
+            'uid': uid,
+            'isEmailVerified': isEmailVerified,
         },
-        secrete,
+        secreteRt,
         { expiresIn: '30d' },
     );
 
-    res.json({ accessToken });
+    return refreshToken;
+};
+
+const genAccessToken = (
+    uid: Types.ObjectId,
+    isAuth: boolean = false,
+    isEmailVerified: boolean = false,
+): string | undefined => {
+    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
+
+    if (!secreteAt) {
+        return undefined;
+    }
+
+    const accessToken = jwt.sign(
+        {
+            'isAuth': isAuth,
+            'uid': uid,
+            'isEmailVerified': isEmailVerified,
+        },
+        secreteAt,
+        { expiresIn: '30m' },
+    );
+
+    return accessToken;
 };
 
 /**
@@ -106,25 +146,40 @@ const guestLogin = async (res: Response, secrete: string) => {
  * If email and password are missing, the user will login as guest.
  * */
 export const login = asyncHandler(async (req: Request, res: Response) => {
-    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
-    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
-
-    if (!secreteAt || !secreteRt) {
-        res.status(500).json({ message: 'Internal server error.' });
-        return;
-    }
-
     const { email, password } = req.body;
 
+    const sendTokens = (user: AuthUserDoc | GuestUserDoc) => {
+        const isAuth = 'email' in user;
+        const isEmailVerified = isAuth ? user.tempEmail !== 'new' : false;
+
+        const refreshToken = genRefreshToken(user._id, isAuth, isEmailVerified);
+        const accessToken = genAccessToken(user._id, isAuth, isEmailVerified);
+        const oneMonth = 30 * 24 * 60 * 60 * 1000;
+
+        if (!refreshToken || !accessToken) {
+            res.status(500).json({ message: 'Internal server error.' });
+            return;
+        }
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: oneMonth,
+        });
+        res.json({ accessToken });
+    };
+
+    // Guest login
     if (!email || !password) {
-        guestLogin(res, secreteAt);
+        const user = await GuestUser.create({});
+        sendTokens(user);
         return;
     }
 
     const user = await AuthUser.findOne({ email }).lean();
 
     if (!user) {
-        res.status(401).json({ message: 'User not found.' });
+        res.status(404).json({ message: 'User not found.' });
         return;
     }
 
@@ -135,32 +190,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         return;
     }
 
-    const accessToken = jwt.sign(
-        {
-            'isAuth': true,
-            'uid': user._id,
-        },
-        secreteAt,
-        { expiresIn: '30m' },
-    );
-
-    const refreshToken = jwt.sign(
-        {
-            'isAuth': true,
-            'uid': user._id,
-        },
-        secreteRt,
-        { expiresIn: '30d' },
-    );
-
-    res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    });
-
-    res.json({ accessToken });
+    sendTokens(user);
 });
 
 /**
@@ -198,7 +228,7 @@ export const activateAccount = asyncHandler(
             user.email = user.tempEmail;
         }
 
-        user['tempEmail'] = undefined;
+        user.tempEmail = undefined;
         await Secrete.deleteOne({ _id: secrete._id });
         await user.save();
 
@@ -349,10 +379,9 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         return;
     }
 
-    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
     const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
 
-    if (!secreteAt || !secreteRt) {
+    if (!secreteRt) {
         res.status(500).json({ message: 'Internal server error.' });
         return;
     }
@@ -368,21 +397,24 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
                 return;
             }
 
-            const exists = await AuthUser.exists({ _id: uid });
+            const user: AuthUserDoc | GuestUserDoc | null = isAuth
+                ? await AuthUser.findOne({ _id: uid }).lean()
+                : await GuestUser.findOne({ _id: uid }).lean();
 
-            if (!exists) {
+            if (!user) {
                 res.status(404).json({ message: 'User not found' });
                 return;
             }
 
-            const accessToken = jwt.sign(
-                {
-                    'isAuth': isAuth,
-                    'uid': uid,
-                },
-                secreteAt,
-                { expiresIn: '30m' },
-            );
+            const isEmailVerified =
+                'email' in user ? user.tempEmail !== 'new' : false;
+
+            const accessToken = genAccessToken(uid, isAuth, isEmailVerified);
+
+            if (!accessToken) {
+                res.status(500).json({ message: 'Internal server error.' });
+                return;
+            }
 
             res.json({ accessToken });
         },
