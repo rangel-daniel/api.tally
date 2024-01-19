@@ -27,7 +27,6 @@ export interface PollDocument extends Document {
         _id: Types.ObjectId;
         opt: string;
     }[];
-    users: number;
     settings: {
         deadline?: Date;
         reqLogin: boolean;
@@ -56,16 +55,17 @@ const pollSchema = new Schema<PollDocument>(
                 }),
             ],
             validate: {
-                validator: (value: any) => {
+                validator: (
+                    value: {
+                        _id: Types.ObjectId;
+                        opt: string;
+                    }[],
+                ) => {
                     return value.length > 1 && value.length <= 10;
                 },
                 message: 'Polls require 2-10 choices.',
             },
             required: true,
-        },
-        users: {
-            type: Number,
-            default: 0,
         },
         settings: {
             type: new Schema(
