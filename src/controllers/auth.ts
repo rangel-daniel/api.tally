@@ -93,10 +93,27 @@ export const registerUser = asyncHandler(
     },
 );
 
+export const getUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { isAuth, uid } = req;
+
+    if (!uid || !isAuth) {
+        res.status(400).json({ message: 'Missing data.' });
+        return;
+    }
+
+    const user = await AuthUser.findById(uid).select('-password').lean();
+
+    if (!user) {
+        res.status(404).json({ message: 'User not found.' });
+        return;
+    }
+
+    res.json({ user });
+});
+
 const genRefreshToken = (
     uid: Types.ObjectId,
     isAuth: boolean = false,
-    isEmailVerified: boolean = false,
 ): string | undefined => {
     const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
 
@@ -108,7 +125,6 @@ const genRefreshToken = (
         {
             'isAuth': isAuth,
             'uid': uid,
-            'isEmailVerified': isEmailVerified,
         },
         secreteRt,
         { expiresIn: '30d' },
@@ -152,7 +168,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         const isAuth = 'email' in user;
         const isEmailVerified = isAuth ? user.tempEmail !== 'new' : false;
 
-        const refreshToken = genRefreshToken(user._id, isAuth, isEmailVerified);
+        const refreshToken = genRefreshToken(user._id, isAuth);
         const accessToken = genAccessToken(user._id, isAuth, isEmailVerified);
         const oneMonth = 30 * 24 * 60 * 60 * 1000;
 

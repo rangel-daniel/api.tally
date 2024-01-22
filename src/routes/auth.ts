@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
     registerUser,
+    getUser,
     activateAccount,
     changePasswordWithToken,
     forgotPassword,
@@ -18,7 +19,7 @@ import { verifyJwt } from '../middleware/verifyJwt';
 
 const router = Router();
 
-router.route('/').post(loginLimiter, login);
+router.route('/').get(verifyJwt, getUser).post(loginLimiter, login);
 router.route('/refresh').get(refresh);
 router.route('/signup').post(registerUser);
 router.route('/logout').post(logout);
@@ -33,6 +34,5 @@ router.route('/password/:token').patch(changePasswordWithToken);
 
 router.route('/resend-email').post(resendEmail);
 router.route('/activate/:token').patch(activateAccount);
-
 
 export default router;
