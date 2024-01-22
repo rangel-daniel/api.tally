@@ -4,11 +4,11 @@ const root = express.Router();
 
 const wildcard = express.Router();
 
-root.get('/', (req, res) => {
+root.get('/', (_, res) => {
 	return res.json({ message: 'Tally API' });
 });
 
-wildcard.all('*', (req, res) => {
+wildcard.all('*', (_, res) => {
 	return res.status(404).json({ message: '404 - not found' });
 });
 

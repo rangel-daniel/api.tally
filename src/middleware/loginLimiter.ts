@@ -7,7 +7,7 @@ export const loginLimiter = rateLimit({
     message: {
         message: 'Too many attempts to login. Reattempt in 1 minute.',
     },
-    handler: (req: Request, res: Response, next, options) => {
+    handler: (_, res: Response, next, options) => {
         res.status(options.statusCode).send(options.message);
         next();
     },
