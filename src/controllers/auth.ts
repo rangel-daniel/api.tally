@@ -1,198 +1,52 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../middleware/verifyJwt';
+import { AuthRequest, DecodedAt } from '../middleware/verifyJwt';
 import asyncHandler from 'express-async-handler';
-import {
-    AuthUser,
-    AuthUserDoc,
-    GuestUser,
-    GuestUserDoc,
-    User,
-} from '../models/User';
+import { AuthUser, AuthUserDoc, GuestUser, GuestUserDoc } from '../models/User';
 import { sendEmail } from '../utils/email';
 import Secrete from '../models/secrete';
 import bcrypt from 'bcrypt';
 import jwt, { JsonWebTokenError } from 'jsonwebtoken';
-import { Types } from 'mongoose';
 
-const emailUser = async (type: 'activate' | 'password', user: AuthUserDoc) => {
-    const { _id: uid, tempEmail, name } = user;
-    let email = user.email;
+export const signup = asyncHandler(async (req: Request, res: Response) => {
+    const { email, name, password } = req.body;
 
-    if (type === 'activate') {
-        if (!tempEmail) return;
-        if (tempEmail !== 'new') email = tempEmail;
-    }
-
-    const userInfo = { uid, email, name };
-
-    const secrete = await Secrete.create({ type, uid });
-
-    await sendEmail(userInfo, secrete);
-};
-
-export const resendEmail = asyncHandler(async (req: Request, res: Response) => {
-    const { email } = req.body;
-    const type: 'activate' | 'password' = req.body.type;
-
-    if (!email || !type) {
+    if (!email || !name || !password) {
         res.status(400).json({ message: 'Missing data.' });
         return;
     }
 
-    const user = await AuthUser.findOne({ email });
+    const duplicate = await AuthUser.exists({ email });
 
-    if (!user) {
-        res.status(404).json({ message: 'Email not found.' });
+    if (duplicate) {
+        res.status(409).json({ message: 'Duplicate email.' });
         return;
     }
 
-    emailUser(type, user);
-    res.json({ message: 'Email sent.' });
+    const user = await AuthUser.create({ email, name, password });
+
+    await emailUser(false, user);
+
+    const success = await setRefreshToken(res, user);
+
+    if (success) res.json({ message: 'Successful sign up!' });
 });
-
-/**
- * @description
- * if _id is passed in the request body, it'll try to turn a guest user to an
- * authenticated user.
- * */
-export const registerUser = asyncHandler(
-    async (req: Request, res: Response) => {
-        const { email, name, password, _id } = req.body;
-
-        if (!email || !name || !password) {
-            res.status(400).json({ message: 'Missing data.' });
-            return;
-        }
-
-        const duplicate = await AuthUser.exists({ email });
-
-        if (duplicate) {
-            res.status(409).json({ message: 'Duplicate email.' });
-            return;
-        }
-
-        const info = {
-            email,
-            name,
-            password,
-        };
-
-        if (_id) {
-            const guest = await GuestUser.findByIdAndDelete(_id);
-            if (!guest) {
-                res.status(404).json({ message: 'User does not exist.' });
-                return;
-            }
-        }
-
-        const user = await AuthUser.create(_id ? { ...info, _id } : info);
-
-        await emailUser('activate', user);
-
-        res.json({ message: 'Successful sign up!' });
-    },
-);
-
-export const getUser = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { isAuth, uid } = req;
-
-    if (!uid || !isAuth) {
-        res.status(400).json({ message: 'Missing data.' });
-        return;
-    }
-
-    const user = await AuthUser.findById(uid).select('-password').lean();
-
-    if (!user) {
-        res.status(404).json({ message: 'User not found.' });
-        return;
-    }
-
-    res.json({ user });
-});
-
-const genRefreshToken = (
-    uid: Types.ObjectId,
-    isAuth: boolean = false,
-): string | undefined => {
-    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
-
-    if (!secreteRt) {
-        return undefined;
-    }
-
-    const refreshToken = jwt.sign(
-        {
-            'isAuth': isAuth,
-            'uid': uid,
-        },
-        secreteRt,
-        { expiresIn: '30d' },
-    );
-
-    return refreshToken;
-};
-
-const genAccessToken = (
-    uid: Types.ObjectId,
-    isAuth: boolean = false,
-    isEmailVerified: boolean = false,
-): string | undefined => {
-    const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
-
-    if (!secreteAt) {
-        return undefined;
-    }
-
-    const accessToken = jwt.sign(
-        {
-            'isAuth': isAuth,
-            'uid': uid,
-            'isEmailVerified': isEmailVerified,
-        },
-        secreteAt,
-        { expiresIn: '30m' },
-    );
-
-    return accessToken;
-};
 
 /**
  * @description
  * If email and password are missing, the user will login as guest.
  * */
-export const login = asyncHandler(async (req: Request, res: Response) => {
+export const signin = asyncHandler(async (req: Request, res: Response) => {
     const { email, password } = req.body;
-
-    const sendTokens = (user: AuthUserDoc | GuestUserDoc) => {
-        const isAuth = 'email' in user;
-        const isEmailVerified = isAuth ? user.tempEmail !== 'new' : false;
-
-        const refreshToken = genRefreshToken(user._id, isAuth);
-        const accessToken = genAccessToken(user._id, isAuth, isEmailVerified);
-        const oneMonth = 30 * 24 * 60 * 60 * 1000;
-
-        if (!refreshToken || !accessToken) {
-            res.status(500).json({ message: 'Internal server error.' });
-            return;
-        }
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'none',
-            maxAge: oneMonth,
-        });
-        res.json({ accessToken });
-    };
 
     // Guest login
     if (!email || !password) {
         const user = await GuestUser.create({});
-        sendTokens(user);
+        const success = await setRefreshToken(res, user);
+        if (success) res.json({ message: 'Signed in as guest!' });
         return;
     }
 
-    const user = await AuthUser.findOne({ email }).lean();
+    const user = await AuthUser.findOne({ email });
 
     if (!user) {
         res.status(404).json({ message: 'User not found.' });
@@ -206,68 +60,165 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         return;
     }
 
-    sendTokens(user);
+    const success = await setRefreshToken(res, user);
+    if (success) res.json({ message: 'Successful sign up!' });
 });
+
+export const authenticate = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { uid, isAuth } = req;
+    const { email, name, password } = req.body;
+
+    if (isAuth) {
+        res.status(400).json({ message: 'User usalready authenticated.' });
+        return;
+    }
+
+    const duplicate = await AuthUser.exists({ email });
+    if (duplicate) {
+        res.status(409).json({ message: 'Duplicate email.' });
+        return;
+    }
+
+    const guestUser = await GuestUser.findById(uid);
+    if (!guestUser) {
+        res.status(404).json({ message: 'User does not exist.' });
+        return;
+    }
+
+    const authUser = await AuthUser.create({
+        _id: uid,
+        email,
+        name,
+        password,
+    });
+    await guestUser.remove();
+
+    const success = await setRefreshToken(res, authUser);
+
+    if (success) res.json({ message: 'Successful sign up!' });
+});
+
+export const emailUser = async (isPassword: boolean, user: AuthUserDoc) => {
+    const { _id: uid, tempEmail, name } = user;
+    let email = user.email;
+
+    if (!isPassword && tempEmail) {
+        email = tempEmail;
+    }
+
+    const userInfo = { uid, email, name };
+
+    const secrete = await Secrete.create({ isPassword, uid });
+
+    await sendEmail(userInfo, secrete);
+};
+
+export const resendEmail = asyncHandler(async (req: Request, res: Response) => {
+    const { email, isPassword } = req.body;
+
+    if (!email || isPassword !== undefined) {
+        res.status(400).json({ message: 'Missing data.' });
+        return;
+    }
+
+    const user = await AuthUser.findOne({ email });
+
+    if (!user) {
+        res.status(404).json({ message: 'Email not found.' });
+        return;
+    }
+
+    emailUser(isPassword, user);
+    res.json({ message: 'Email sent.' });
+});
+
+const setRefreshToken = (res: Response, user: AuthUserDoc | GuestUserDoc) => {
+    const isAuth = 'email' in user;
+    const secreteRt = process.env.REFRESH_TOKEN_SECRETE;
+
+    if (!secreteRt) {
+        res.status(500).json({ message: 'Failed to retrieve environment variables.' });
+        return Promise.resolve(null);
+    }
+
+    const refreshToken = jwt.sign(
+        {
+            'isAuth': isAuth,
+            'uid': user._id.toString(),
+        },
+        secreteRt,
+        { expiresIn: '30d' },
+    );
+
+    const oneMonth = 30 * 24 * 60 * 60 * 1000;
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        maxAge: oneMonth,
+    });
+
+    return isAuth
+        ? AuthUser.findByIdAndUpdate(user._id, { token: refreshToken })
+        : GuestUser.findByIdAndUpdate(user._id, { token: refreshToken });
+};
 
 /**
  * @description
  * Used for initial account activation and to confirm new email.
  * */
-export const activateAccount = asyncHandler(
-    async (req: Request, res: Response) => {
-        const { token } = req.params;
+export const activateAccount = asyncHandler(async (req: Request, res: Response) => {
+    const { token } = req.body;
 
-        const secrete = await Secrete.findOne({ token }).lean();
+    const secrete = await Secrete.findOne({ token }).lean();
 
-        if (!secrete || secrete.type !== 'activate') {
-            res.status(404).json({ message: 'Invalid token.' });
+    if (!secrete || secrete.isPassword) {
+        res.status(404).json({ message: 'Invalid token.' });
+        return;
+    }
+
+    const user = await AuthUser.findById(secrete.uid);
+
+    if (!user || (!user.tempEmail && user.isVerified)) {
+        res.status(404).json({ message: 'Invalid token.' });
+        return;
+    }
+
+    if (user.isVerified) {
+        const duplicate = await AuthUser.exists({ email: user.tempEmail });
+
+        if (duplicate) {
+            res.status(409).json({ message: 'Duplicate email.' });
             return;
         }
 
-        const user = await AuthUser.findById(secrete.uid).select(
-            'email tempEmail',
-        );
-
-        if (!user || !user.tempEmail) {
-            res.status(404).json({ message: 'Invalid token.' });
-            return;
-        }
-
-        if (user.tempEmail !== 'new') {
-            const duplicate = await AuthUser.exists({ email: user.tempEmail });
-
-            if (duplicate) {
-                res.status(409).json({ message: 'Duplicate email.' });
-                return;
-            }
-
-            user.email = user.tempEmail;
-        }
-
+        user.email = user.tempEmail;
         user.tempEmail = undefined;
-        await Secrete.deleteOne({ _id: secrete._id });
-        await user.save();
+    } else {
+        user.isVerified = true;
+    }
 
-        res.json({ message: 'Account successfully activated!' });
-    },
-);
+    await Secrete.deleteOne({ _id: secrete._id });
+    await user.save();
 
-export const forgotPassword = asyncHandler(
-    async (req: Request, res: Response) => {
-        const { email } = req.body;
+    res.json({ message: 'Account successfully activated!' });
+});
 
-        const user = await AuthUser.findOne({ email });
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
 
-        if (!user) {
-            res.status(404).json({ message: 'User does not exist.' });
-            return;
-        }
+    const user = await AuthUser.findOne({ email });
 
-        await emailUser('password', user);
+    if (!user) {
+        res.status(404).json({ message: 'User does not exist.' });
+        return;
+    }
 
-        res.json({ message: 'Email sent.' });
-    },
-);
+    await emailUser(true, user);
+
+    res.json({ message: 'Email sent.' });
+});
 
 export const changePasswordWithToken = asyncHandler(
     async (req: Request, res: Response) => {
@@ -280,9 +231,8 @@ export const changePasswordWithToken = asyncHandler(
         }
 
         const secrete = await Secrete.findOne({ token });
-        const validUser = await User.exists({ _id: secrete?.uid });
 
-        if (!secrete || secrete.type !== 'password' || !validUser) {
+        if (!secrete || !secrete.isPassword) {
             res.status(400).json({ message: 'Invalid token.' });
             return;
         }
@@ -290,11 +240,12 @@ export const changePasswordWithToken = asyncHandler(
         const user = await AuthUser.findById(secrete.uid).select('password');
 
         if (!user) {
-            res.status(404).json({ message: 'Invalid token.' });
+            res.status(404).json({ message: 'User does not exist.' });
             return;
         }
 
         user.password = password;
+
         await user.save();
 
         await secrete.deleteOne();
@@ -303,95 +254,11 @@ export const changePasswordWithToken = asyncHandler(
     },
 );
 
-export const updateEmail = asyncHandler(
-    async (req: AuthRequest, res: Response) => {
-        const { email } = req.body;
-        const { isAuth, uid } = req;
-
-        if (!isAuth || !uid || !email) {
-            res.status(400).json({ message: 'Missing data.' });
-            return;
-        }
-
-        const duplicate = await AuthUser.exists({ email });
-
-        if (duplicate) {
-            res.status(409).json({ message: 'Duplicate email.' });
-            return;
-        }
-
-        const user = await AuthUser.findById(uid);
-
-        if (!user) {
-            res.status(404).json({ message: 'User not found.' });
-            return;
-        }
-
-        if (email.trim() != user.email) {
-            user.tempEmail = email;
-            const updatedUser = await user.save();
-            await emailUser('activate', updatedUser);
-        }
-
-        res.json({ message: 'Email updated.' });
-    },
-);
-
-export const updatePassword = asyncHandler(
-    async (req: AuthRequest, res: Response) => {
-        const { current, update } = req.body;
-        const { isAuth, uid } = req;
-
-        if (!isAuth || !uid || !update || !current) {
-            res.status(400).json({ message: 'Missing data.' });
-            return;
-        }
-
-        const user = await AuthUser.findById(uid);
-
-        if (!user) {
-            res.status(404).json({ message: 'User not found.' });
-            return;
-        }
-
-        const match = await bcrypt.compare(current, user.password);
-
-        if (!match) {
-            res.status(401).json({ message: 'Invalid password.' });
-            return;
-        }
-
-        user.password = update;
-
-        await user.save();
-        res.json({ message: 'Password updated.' });
-    },
-);
-
-export const updateName = asyncHandler(
-    async (req: AuthRequest, res: Response) => {
-        const { name } = req.body;
-        const { isAuth, uid } = req;
-
-        if (!isAuth || !uid || !name) {
-            res.status(400).json({ message: 'Missing data.' });
-            return;
-        }
-
-        const user = await AuthUser.findById(uid);
-
-        user.name = name;
-        await user.save();
-
-        res.json({ message: 'Name updated.' });
-    },
-);
-
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
     const { refreshToken } = req.cookies;
 
     if (!refreshToken) {
-        res.status(401).json({ message: 'Missing token.' });
+        res.status(400).json({ message: 'Missing token.' });
         return;
     }
 
@@ -406,38 +273,45 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         refreshToken,
         secreteRt,
         async (error: JsonWebTokenError | null, decoded: any) => {
-            const { uid, isAuth } = decoded;
-
-            if (error || !uid) {
-                res.status(403).json({ message: 'Missing cookie.' });
+            if (error) {
+                res.status(401).json({ message: 'Token is invalid or has expired.' });
                 return;
             }
 
-            const user: AuthUserDoc | GuestUserDoc | null = isAuth
-                ? await AuthUser.findOne({ _id: uid }).lean()
-                : await GuestUser.findOne({ _id: uid }).lean();
+            const secreteAt = process.env.ACCESS_TOKEN_SECRETE;
 
-            if (!user) {
-                res.status(404).json({ message: 'User not found' });
-                return;
-            }
-
-            const isEmailVerified =
-                'email' in user ? user.tempEmail !== 'new' : false;
-
-            const accessToken = genAccessToken(uid, isAuth, isEmailVerified);
-
-            if (!accessToken) {
+            if (!secreteAt) {
                 res.status(500).json({ message: 'Internal server error.' });
                 return;
             }
+
+            const { uid, isAuth } = decoded;
+
+            const user: AuthUserDoc | GuestUserDoc | null = isAuth
+                ? await AuthUser.findOne({ _id: uid, token: refreshToken }).lean()
+                : await GuestUser.findOne({ _id: uid, token: refreshToken }).lean();
+
+            if (!user) {
+                res.status(401).json({ message: 'Token is invalid or has expired.' });
+                return;
+            }
+
+            const jwtFields: DecodedAt = { 'isAuth': isAuth, 'uid': uid };
+            const isVerified: boolean | undefined =
+                'isVerified' in user ? user.isVerified : undefined;
+
+            if (isVerified !== undefined) {
+                jwtFields['isVerified'] = isVerified;
+            }
+
+            const accessToken = jwt.sign(jwtFields, secreteAt, { expiresIn: '30m' });
 
             res.json({ accessToken });
         },
     );
 });
 
-export const logout = asyncHandler(async (req: Request, res: Response) => {
+export const signout = asyncHandler(async (req: Request, res: Response) => {
     const { refreshToken } = req.cookies;
 
     if (!refreshToken) {
@@ -454,37 +328,35 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
     res.json({ message: 'Logged out!' });
 });
 
-export const deleteAccount = asyncHandler(
-    async (req: AuthRequest, res: Response) => {
-        const { password } = req.body;
-        const { isAuth, uid } = req;
+export const deleteAccount = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { password } = req.body;
+    const { isAuth, uid } = req;
 
-        if (!isAuth || !uid || !password) {
-            res.status(400).json({ message: 'Missing data.' });
-            return;
-        }
+    if (!isAuth || !uid || !password) {
+        res.status(400).json({ message: 'Missing data.' });
+        return;
+    }
 
-        const user = await AuthUser.findById(uid);
+    const user = await AuthUser.findById(uid);
 
-        if (!user) {
-            res.status(404).json({ message: 'User not found.' });
-            return;
-        }
+    if (!user) {
+        res.status(404).json({ message: 'User not found.' });
+        return;
+    }
 
-        const match = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(password, user.password);
 
-        if (!match) {
-            res.status(401).json({ message: 'Invalid password.' });
-            return;
-        }
+    if (!match) {
+        res.status(401).json({ message: 'Invalid password.' });
+        return;
+    }
 
-        const { deletedCount } = await user.deleteOne();
+    const { deletedCount } = await user.deleteOne();
 
-        if (!deletedCount) {
-            res.status(500).json({ message: 'Internal server error.' });
-            return;
-        }
+    if (!deletedCount) {
+        res.status(500).json({ message: 'Internal server error.' });
+        return;
+    }
 
-        logout(req, res, () => {});
-    },
-);
+    signout(req, res, () => {});
+});

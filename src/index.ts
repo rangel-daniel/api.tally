@@ -5,6 +5,7 @@ import http from 'http';
 
 import { root, wildcard } from './routes/root';
 import auth from './routes/auth';
+import user from './routes/user';
 import poll from './routes/poll';
 
 import connectDb from './config/connectDb';
@@ -34,6 +35,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/', root);
 app.use('/auth', auth);
+app.use('/user', user);
 app.use('/poll', poll);
 app.use('*', wildcard);
 

@@ -9,7 +9,6 @@ export const loginLimiter = rateLimit({
     },
     handler: (_, res: Response, next, options) => {
         res.status(options.statusCode).send(options.message);
-        next();
     },
     standardHeaders: true,
     legacyHeaders: true,

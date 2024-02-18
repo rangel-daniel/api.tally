@@ -1,38 +1,30 @@
 import { Router } from 'express';
 import {
-    registerUser,
-    getUser,
+    signup,
+    signin,
     activateAccount,
     changePasswordWithToken,
     forgotPassword,
-    login,
     refresh,
-    logout,
-    updatePassword,
-    updateEmail,
-    updateName,
+    signout,
     deleteAccount,
     resendEmail,
+    authenticate,
 } from '../controllers/auth';
 import { loginLimiter } from '../middleware/loginLimiter';
 import { verifyJwt } from '../middleware/verifyJwt';
 
 const router = Router();
 
-router.route('/').get(verifyJwt, getUser).post(loginLimiter, login);
-router.route('/refresh').get(refresh);
-router.route('/signup').post(registerUser);
-router.route('/logout').post(logout);
+router.route('/').get(refresh).post(loginLimiter, signin).delete(signout);
+router.route('/signup').post(signup).patch(verifyJwt, authenticate);
 
-router.route('/update-password').patch(verifyJwt, updatePassword);
-router.route('/update-email').patch(verifyJwt, updateEmail);
-router.route('/update-name').patch(verifyJwt, updateName);
 router.route('/delete-account').delete(verifyJwt, deleteAccount);
 
 router.route('/forgot-password').post(forgotPassword);
-router.route('/password/:token').patch(changePasswordWithToken);
+router.route('/password').patch(changePasswordWithToken);
 
 router.route('/resend-email').post(resendEmail);
-router.route('/activate/:token').patch(activateAccount);
+router.route('/activate').patch(activateAccount);
 
 export default router;
