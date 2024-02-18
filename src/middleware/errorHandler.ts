@@ -16,7 +16,7 @@ const errorHandler = async (
     let body: { [key: string]: unknown } = {};
 
     if (process.env.NODE_ENV === 'Dev') {
-        console.error(JSON.stringify(error));
+        console.error(JSON.stringify(error), req.url);
     }
 
     if (error.name === 'MongoServerError') {
@@ -39,14 +39,13 @@ const errorHandler = async (
         const errors = error.errors;
 
         for (const key in errors) {
-            body[key] = (errors[key] as MongoError.ValidatorError).properties
-                ?.message;
+            body[key] = (errors[key] as MongoError.ValidatorError).properties?.message;
         }
     } else {
         const { method, url } = req;
-        const { message, name } = error;
+        const { message } = error;
 
-        body = { method, url, name, message };
+        body = { method, url, message };
     }
 
     res.status(status).json(body);

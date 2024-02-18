@@ -7,6 +7,7 @@ const ONE_MONTH = 60 * 60 * 30;
 
 interface UserDoc extends Document {
     _id: Types.ObjectId;
+    token?: string;
 }
 
 export interface GuestUserDoc extends UserDoc {
@@ -18,12 +19,14 @@ export interface AuthUserDoc extends UserDoc {
     tempEmail?: string;
     password: string;
     name: string;
+    isVerified: boolean;
 }
 
 const userSchema = new Schema<UserDoc>({}, { timestamps: true });
 
 const guestUserSchema = new Schema<GuestUserDoc>({
     expireAt: { type: Date, expires: ONE_MONTH, default: Date.now },
+    token: { type: String },
 });
 
 const authUserSchema = new Schema<AuthUserDoc>({
@@ -44,11 +47,10 @@ const authUserSchema = new Schema<AuthUserDoc>({
         trim: true,
         validate: {
             validator: (value: string) => {
-                return isEmail(value) || value === 'new';
+                return isEmail(value);
             },
             message: 'Invalid email.',
         },
-        default: 'new',
     },
     password: {
         type: String,
@@ -71,6 +73,8 @@ const authUserSchema = new Schema<AuthUserDoc>({
             message: 'Invalid name.',
         },
     },
+    isVerified: { type: Boolean, default: false },
+    token: { type: String },
 });
 
 // Password hashing

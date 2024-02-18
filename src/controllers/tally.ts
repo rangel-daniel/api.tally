@@ -1,52 +1,36 @@
 import asyncHandler from 'express-async-handler';
-import isMongoId from 'validator/lib/isMongoId';
 
 import { AuthRequest } from '../middleware/verifyJwt';
 import { Response } from 'express';
 import { Poll, PollDocument } from '../models/Poll';
 import { Tally } from '../models/Tally';
-import { Server } from 'socket.io';
-
-/**
- * Fetches and emits updated tally to connected clients via websockets.
- *
- * @param {Server} io - socket.io server instance.
- * @param {PollDocument} poll - Poll data.
- */
-const emitUpdate = async (io: Server, poll: PollDocument) => {
-    const pid = poll._id;
-    const reqNames = poll.settings.reqNames;
-
-    const data = await Tally.find({ pid })
-        .select('updatedAt opts' + reqNames ? ' name' : '')
-        .lean();
-
-    if (data) io.to(pid).emit('update', data);
-};
+import { isIP } from 'net';
 
 /**
  * Validates vote.
  * @returns (string) validation error message.
  * @returns (undefined) Valid vote.
  * */
-const isValidVote = async (
+const isValidVote = (
     poll: PollDocument,
     opts: string[],
     name: string | undefined,
     isAuth: boolean,
-): Promise<string | undefined> => {
+): string | undefined => {
     let message!: string;
 
-    const { settings } = poll;
-    const options = poll.opts.map((opt) => opt._id.toString());
-    const deadline = settings.deadline
-        ? new Date(settings.deadline)
-        : undefined;
+    const { settings, opts: validOpts } = poll;
 
-    if (opts.length > 1) opts = [...new Set(opts)];
-    opts = opts.filter((opt: string) => options.includes(opt));
+    const deadline = settings.deadline ? new Date(settings.deadline) : undefined;
+    const validIds = validOpts.map((opt) => opt._id.toString());
 
-    if (settings.reqLogin && !isAuth) {
+    for (let i = opts.length - 1; i >= 0; i--) {
+        if (!validIds.includes(opts[i])) {
+            opts.splice(i, 1);
+        }
+    }
+
+    if (settings.reqSignin && !isAuth) {
         message = 'User account required. Please sign up or login to vote.';
     } else if (!opts.length || (opts.length > 1 && !settings.allowMultiple)) {
         message = 'Invalid options.';
@@ -59,95 +43,54 @@ const isValidVote = async (
     return message;
 };
 
-/**
- * Tries to update user's vote.
- * @returns (false) Update attempt was made but invalid.
- * @returns (true) Successful update.
- * @returns (undefined) New vote, no need to update.
- * */
-const tryUpdate = async (
-    poll: PollDocument,
-    opts: any,
-    uid: string,
-    name: string,
-    ip: string,
-): Promise<boolean | undefined> => {
-    let success!: boolean;
-    const { settings } = poll;
-    const tally = await Tally.findOne({ uid, pid: poll._id });
+export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { clientIp: ip, uid, isAuth } = req;
 
-    if (tally) {
-        if (settings.allowEdit) {
-            tally.name = name;
-            tally.opts = opts;
-            tally.ip = ip;
-
-            await tally.save();
-            success = true;
-        } else {
-            success = false;
-        }
+    if (!ip || !isIP(ip) || !uid || isAuth === undefined) {
+        res.status(401).json({ message: 'Unauthorized.' });
+        return;
     }
 
-    return success;
-};
-
-const isValidIp = async (poll: PollDocument, ip: string): Promise<boolean> => {
-    let valid: boolean = true;
-
-    if (!poll.settings.reqLogin)
-        valid = (await Tally.exists({ _id: poll._id, ip })) ? true : false;
-
-    return valid;
-};
-
-export const vote = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const io: Server = req.app.get('io');
-
-    const { clientIp: ip, uid } = req;
-    const isAuth: boolean = req.isAuth ? req.isAuth : false;
     const { pid, name } = req.body;
 
-    let opts = req.body.opts;
+    let duplicate = await Tally.exists({ uid, pid });
 
-    if (!opts || !opts.length || !isMongoId(pid) || !uid || !ip) {
+    if (duplicate) {
+        res.status(409).json({ message: 'You have already participated in this poll.' });
+        return;
+    }
+
+    const opts: string[] = [...new Set<string>(req.body.opts)];
+
+    if (!opts.length || !pid) {
         res.status(400).json({ message: 'Missing data.' });
         return;
     }
 
-    const poll = await Poll.findById(pid).select('_id settings opts').lean();
+    const poll = await Poll.findById(pid);
     if (!poll) {
         res.status(404).json({ message: 'Poll not found.' });
         return;
     }
 
-    const message = await isValidVote(poll, opts, name, isAuth);
+    if (!poll.settings.reqSignin) {
+        duplicate = await Tally.exists({ pid, ip });
+        if (duplicate) {
+            res.status(409).json({
+                message: 'Someone on your network has already voted on this poll.',
+            });
+        }
+    }
+
+    const message = isValidVote(poll, opts, name, isAuth);
+
     if (message) {
         res.status(401).json({ message });
         return;
     }
 
-    const successfulUpdate = await tryUpdate(poll, opts, uid, name, ip);
-    if (successfulUpdate) {
-        res.json({ message: 'Poll updated!' });
-        return;
-    } else if (successfulUpdate === false) {
-        res.status(401).json({
-            message: 'You have already voted on this poll.',
-        });
-        return;
-    }
-
-    const validIp = await isValidIp(poll, ip);
-    if (!validIp) {
-        res.status(409).json({
-            message: 'Someone on your network has already voted on this poll.',
-        });
-        return;
-    }
-
     await Tally.create({ uid, pid, opts, name, ip });
-
     res.json({ message: 'Vote casted.' });
-    await emitUpdate(io, poll);
+
+    await Poll.updateOne({ _id: pid }, { $inc: { count: 1 } });
 });

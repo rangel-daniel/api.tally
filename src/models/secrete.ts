@@ -8,13 +8,9 @@ const secreteSchema = new Schema({
         type: String,
         default: uuid,
     },
-    type: {
-        type: String,
-        enum: {
-            values: ['activate', 'password'],
-            message: 'Secrete type provided is not supported.',
-        },
-        required: [true, 'Missing type.'],
+    isPassword: {
+        type: Boolean,
+        default: false,
     },
     uid: {
         type: Types.ObjectId,
