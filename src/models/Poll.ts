@@ -23,13 +23,14 @@ export const uidField = {
 export interface PollDocument extends Document {
     admin: Types.ObjectId;
     question: string;
+    count: number;
     opts: {
         _id: Types.ObjectId;
         opt: string;
     }[];
     settings: {
         deadline?: Date;
-        reqLogin: boolean;
+        reqSignin: boolean;
         reqNames: boolean;
         allowEdit: boolean;
         allowMultiple: boolean;
@@ -43,6 +44,10 @@ const pollSchema = new Schema<PollDocument>(
             type: String,
             validate: strInputValidator,
             required: true,
+        },
+        count: {
+            type: Number,
+            default: 0,
         },
         opts: {
             type: [
@@ -73,7 +78,7 @@ const pollSchema = new Schema<PollDocument>(
                     deadline: {
                         type: Date,
                     },
-                    reqLogin: {
+                    reqSignin: {
                         type: Boolean,
                         default: false,
                     },

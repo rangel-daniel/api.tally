@@ -21,6 +21,6 @@ router
 
 router.route('/reset').patch(verifyJwt, resetPoll);
 router.route('/tally').post(verifyJwt, vote);
-router.route('/user').get(verifyJwt, getPolls);
+router.route('/user/:page').get(verifyJwt, getPolls);
 
 export default router;

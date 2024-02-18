@@ -70,19 +70,31 @@ export const rmPoll = asyncHandler(async (req: AuthRequest, res: Response) => {
 export const getPolls = asyncHandler(
     async (req: AuthRequest, res: Response) => {
         const { uid: admin } = req;
+        const { page } = req.params;
+        const skip = (parseInt(page) - 1) * 10;
 
         if (!admin) {
             res.status(400).json({ message: 'Missing user.' });
             return;
         }
 
-        const polls = await Poll.find({ admin }).lean();
+        const createdPolls = Poll.find({ admin });
 
-        if (!polls.length) {
-            res.status(204);
+        const count = await createdPolls.countDocuments();
+
+        if (count) {
+            const polls = await Poll.find({ admin })
+                .select('-opts')
+                .sort({ createdAt: 1 })
+                .skip(skip)
+                .limit(10)
+                .lean();
+
+            res.json({ count, polls });
+            return;
         }
 
-        res.json(polls);
+        res.status(204).json({ count, polls: {} });
     },
 );
 
